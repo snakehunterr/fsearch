@@ -1,6 +1,7 @@
 package args
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -36,6 +37,9 @@ const (
 	ARG_HELP      = "-h"
 	ARG_HELP_LONG = "--help"
 )
+
+//go:embed version
+var version string
 
 func Argparse() (*Args, error) {
 	var (
@@ -125,8 +129,7 @@ func print_usage(prog_name string) {
 		return s + strings.Repeat(" ", n-len(s))
 	}
 
-	const PROG_VER = "0.0.0"
-	const LOGO = C_LINE1 + "    dMMMMMP .dMMMb " + C_RESET +
+	LOGO := C_LINE1 + "    dMMMMMP .dMMMb " + C_RESET +
 		"  dMMMMMP .aMMMb  dMMMMb  .aMMMb  dMP dMP\n" + C_LINE2 +
 		"   dMP     dMP\" VP" + C_RESET +
 		" dMP     dMP\"dMP dMP.dMP dMP\"VMP dMP dMP\n" + C_LINE3 +
@@ -136,7 +139,7 @@ func print_usage(prog_name string) {
 		" dMP     dMP dMP dMP\"AMF dMP.aMP dMP dMP\n" + C_LINE5 +
 		"dMP      VMMMP\"" + C_RESET +
 		" dMMMMMP dMP dMP dMP dMP  VMMMP\" dMP dMP    " + C_LINE5 +
-		"v" + PROG_VER + C_RESET
+		version + C_RESET
 
 	const DESC_OFFSET = "  "
 
