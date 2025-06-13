@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build linux
 
 package walk
 
@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// size of []byte, given to syscall.Syscall6(GETDIRENT)
+	// size of []byte, given to syscall.Syscall(syscall.SYS_GETDENTS64)
 	SCAN_BUF_SIZE = 4 * (1 << 10) // n * (1 << 10) = n KB
 
 	// max retries if getting syscall.EINTR with syscall's
@@ -20,29 +20,25 @@ const (
 
 // from "man dirent":
 //
-//	struct dirent {
-//	    ino_t        d_ino;       // 8 bytes
-//	    uint64_t     d_seekoff;   // 8 bytes
-//	    uint16_t     d_reclen;    // 2 bytes
-//	    uint16_t     d_namlen;    // 2 bytes
-//	    uint8_t      d_type;      // 1 byte
-//	    char         d_name\[1024\];
+//	struct linux_dirent64 {
+//	    ino64_t         d_ino;       // 8 bytes
+//	    off64_t         d_off;       // 8 bytes
+//	    unsigned short  d_reclen;    // 2 bytes
+//	    unsigned char   d_type;      // 1 bytes
+//	    char            d_name[]; // null-terminated
 //	};
 
-// WARN: macOS currently can't create files which have
-// name greater than 255 (syscall.NAME_MAX constant)
-// should then NAME_MAX const setted to syscall.NAME_MAX?
 const (
-	NAME_MAX    = 1024 // according to `man dirent`
-	DIRENT_SIZE = 8 + 8 + 2 + 2 + 1
+	NAME_MAX    = syscall.NAME_MAX
+	DIRENT_SIZE = 8 + 8 + 2 + 1
 )
 
 type dirent struct {
 	d_ino    uint64
-	d_seek   uint64
+	d_seek   int64
 	d_reclen uint16
-	d_namlen uint16
 	d_type   uint8
+	d_namlen uint8
 	d_name   [NAME_MAX]byte
 	d_path   string
 }
@@ -77,19 +73,16 @@ func walk(path string, de_chan chan<- dirent, err_chan chan<- error, wg *sync.Wa
 	defer syscall.Close(fd)
 
 	var (
-		buf   [SCAN_BUF_SIZE]byte
-		basep int64 // macOS off_t
-		n     int
+		buf [SCAN_BUF_SIZE]byte
+		n   int
 	)
 
 	for {
-		r1, _, errno = syscall.Syscall6(
-			syscall.SYS_GETDIRENTRIES64,
+		r1, _, errno = syscall.Syscall(
+			syscall.SYS_GETDENTS64,
 			uintptr(fd),
 			uintptr(unsafe.Pointer(&buf[0])),
-			uintptr(len(buf)),
-			uintptr(unsafe.Pointer(&basep)),
-			0, 0, // padding
+			uintptr(SCAN_BUF_SIZE),
 		)
 
 		if errno != 0 {
@@ -103,84 +96,68 @@ func walk(path string, de_chan chan<- dirent, err_chan chan<- error, wg *sync.Wa
 			return nil
 		}
 
-		offset := 0
-		for offset < n {
-			if offset+DIRENT_SIZE > n {
-				break
+		for offset := 0; offset < n; {
+			var de dirent
+
+			de.d_reclen = *(*uint16)(unsafe.Pointer(&buf[offset+16]))
+
+			if de.d_reclen == 0 {
+				continue
 			}
 
-			d_reclen := *(*uint16)(unsafe.Pointer(&buf[offset+16]))
-			if d_reclen == 0 || offset+int(d_reclen) > n {
-				break
-			}
-
-			var (
-				d_ino     uint64
-				d_seekoff uint64
-				d_namlen  uint16
-				d_type    uint8
-				d_name    [NAME_MAX]byte
-			)
-
-			d_ino = *(*uint64)(unsafe.Pointer(&buf[offset])) // 0
-
-			// XXX: from os/dir_darwin.go `func(f *File) readdir():`
-			// Darwin may return a zero inode when a directory entry has been
-			// deleted but not yet removed from the directory. The man page for
-			// getdirentries(2) states that programs are responsible for skipping
-			// those entries:
-			//
-			//   Users of getdirentries() should skip entries with d_fileno = 0,
-			//   as such entries represent files which have been deleted but not
-			//   yet removed from the directory entry.
-			if d_ino == 0 {
+			de.d_ino = *(*uint64)(unsafe.Pointer(&buf[offset]))
+			if de.d_ino == 0 {
 				goto skip
 			}
 
-			d_seekoff = *(*uint64)(unsafe.Pointer(&buf[offset+8])) // 0 + 8 = 8
-			// d_recl already parsed // 8 + 8 = 16
-			d_namlen = *(*uint16)(unsafe.Pointer(&buf[offset+18])) // 16 + 2 = 18
-			d_type = *(*uint8)(unsafe.Pointer(&buf[offset+20]))    // 18 + 2 = 20
+			de.d_name = *(*[NAME_MAX]byte)(unsafe.Pointer(&buf[offset+DIRENT_SIZE]))
 
-			// Name starts at offset DIRENT_SIZE
-			if d_namlen > 0 && offset+DIRENT_SIZE+int(d_namlen) <= n {
-				// zero-copy name conversion
-				_tempbuf := buf[offset+DIRENT_SIZE : offset+DIRENT_SIZE+int(d_namlen)]
-				d_name = *(*[NAME_MAX]byte)(unsafe.Pointer(&_tempbuf[0]))
-
-				if (d_namlen == 1 && d_name[0] == '.') || (d_namlen == 2 && d_name[0] == '.' && d_name[1] == '.') {
+			switch de.d_name[0] {
+			case 0:
+				// empty filename?
+				goto skip
+			case '.':
+				switch de.d_name[1] {
+				case 0:
 					goto skip
-				}
-
-				d_path := path + "/" + string(d_name[:d_namlen])
-
-				de_chan <- dirent{
-					d_ino:    d_ino,
-					d_seek:   d_seekoff,
-					d_reclen: d_reclen,
-					d_namlen: d_namlen,
-					d_type:   d_type,
-					d_name:   d_name,
-					d_path:   d_path,
-				}
-
-				if d_type == syscall.DT_DIR {
-					wg.Add(1)
-					go func(path string) {
-						sem <- struct{}{}
-						defer func() {
-							wg.Done()
-							<-sem
-						}()
-						if err := walk(path, de_chan, err_chan, wg, sem); err != nil {
-							err_chan <- err
-						}
-					}(d_path)
+				case '.':
+					if de.d_name[2] == 0 {
+						goto skip
+					}
 				}
 			}
 
+			de.d_type = *(*uint8)(unsafe.Pointer(&buf[offset+18]))
+
+			for i, b := range de.d_name {
+				if b == 0 {
+					de.d_namlen = uint8(i)
+					break
+				}
+			}
+			if de.d_namlen == 0 {
+				de.d_namlen = NAME_MAX
+			}
+
+			de.d_path = path + "/" + string(de.d_name[:de.d_namlen])
+			de_chan <- de
+
+			if de.d_type == syscall.DT_DIR {
+				wg.Add(1)
+				go func(path string) {
+					sem <- struct{}{}
+					defer func() {
+						wg.Done()
+						<-sem
+					}()
+					if err := walk(path, de_chan, err_chan, wg, sem); err != nil {
+						err_chan <- err
+					}
+				}(de.d_path)
+			}
+
 		skip:
-			offset += int(d_reclen)
+			offset += int(de.d_reclen)
 		}
 	}
 }
