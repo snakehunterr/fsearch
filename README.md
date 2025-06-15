@@ -1,10 +1,11 @@
-# FSEARCH
-
-<span>dMMMMMP .dMMMb dMMMMMP .aMMMb dMMMMb .aMMMb dMP dMP</span></br>
-<span>dMP dMP" VP dMP dMP"dMP dMP.dMP dMP"VMP dMP dMP</span></br>
-<span>dMMMP VMMMb dMMMP dMMMMMP dMMMMK" dMP dMMMMMP</span></br>
-<span>dMP dP .dMP dMP dMP dMP dMP"AMF dMP.aMP dMP dMP</span></br>
-<span>dMP VMMMP" dMMMMMP dMP dMP dMP dMP VMMMP" dMP dMP</span></br>
+```
+    dMMMMMP .dMMMb  dMMMMMP .aMMMb  dMMMMb  .aMMMb  dMP dMP 
+   dMP     dMP" VP dMP     dMP"dMP dMP.dMP dMP"VMP dMP dMP  
+  dMMMP    VMMMb  dMMMP   dMMMMMP dMMMMK" dMP     dMMMMMP   
+ dMP     dP .dMP dMP     dMP dMP dMP"AMF dMP.aMP dMP dMP    
+dMP      VMMMP" dMMMMMP dMP dMP dMP dMP  VMMMP" dMP dMP
+```
+                                                            
 
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/snakehunterr/fsearch)
 ![GitHub License](https://img.shields.io/github/license/snakehunterr/fsearch)
