@@ -1,7 +1,6 @@
 package args
 
 import (
-	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -37,9 +36,6 @@ const (
 	ARG_HELP      = "-h"
 	ARG_HELP_LONG = "--help"
 )
-
-//go:embed version
-var version string
 
 func Argparse() (*Args, error) {
 	var (
@@ -119,6 +115,8 @@ func error_unknown_arg(arg string) error {
 	return error_wrapper("unknown flag: " + colorize_flag(arg))
 }
 
+var VERSION string
+
 // print usage and exit
 func print_usage(prog_name string) {
 	rwidth := func(s string, n int) string {
@@ -139,7 +137,7 @@ func print_usage(prog_name string) {
 		" dMP     dMP dMP dMP\"AMF dMP.aMP dMP dMP\n" + C_LINE5 +
 		"dMP      VMMMP\"" + C_RESET +
 		" dMMMMMP dMP dMP dMP dMP  VMMMP\" dMP dMP    " + C_LINE5 +
-		version + C_RESET
+		VERSION + C_RESET
 
 	const DESC_OFFSET = "  "
 

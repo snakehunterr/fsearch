@@ -125,6 +125,7 @@ func walk(path string, de_chan chan<- dirent, err_chan chan<- error, wg *sync.Wa
 			d_ino = *(*uint64)(unsafe.Pointer(&buf[offset])) // 0
 
 			// XXX: from os/dir_darwin.go `func(f *File) readdir():`
+			//
 			// Darwin may return a zero inode when a directory entry has been
 			// deleted but not yet removed from the directory. The man page for
 			// getdirentries(2) states that programs are responsible for skipping

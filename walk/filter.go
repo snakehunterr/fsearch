@@ -1,14 +1,16 @@
-//go:build darwin
-
 package walk
 
 import (
+	"regexp"
 	"sync"
-
-	"github.com/snakehunterr/fsearch/args"
 )
 
-func filter(de_chan <-chan dirent, r_chan chan<- dirent, args *args.Args) chan struct{} {
+type filters struct {
+	REname  *regexp.Regexp
+	REiname *regexp.Regexp
+}
+
+func filter(de_chan <-chan dirent, r_chan chan<- dirent, filters *filters) chan struct{} {
 	var (
 		done    = make(chan struct{})
 		wg      = &sync.WaitGroup{}
@@ -27,14 +29,14 @@ func filter(de_chan <-chan dirent, r_chan chan<- dirent, args *args.Args) chan s
 				}
 
 				// process this entry...
-				if args.RE_name != nil {
-					if !args.RE_name.Match(de.d_name[:de.d_namlen]) {
+				if filters.REname != nil {
+					if !filters.REname.Match(de.d_name[:de.d_namlen]) {
 						continue
 					}
 				}
 
-				if args.RE_iname != nil {
-					if args.RE_iname.Match(de.d_name[:de.d_namlen]) {
+				if filters.REname != nil {
+					if filters.REiname.Match(de.d_name[:de.d_namlen]) {
 						continue
 					}
 				}

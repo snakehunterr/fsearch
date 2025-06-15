@@ -27,7 +27,9 @@ func Walk(args *args.Args) (err error) {
 		sem = make(chan struct{}, runtime.NumCPU()*8)
 	)
 
-	f_done := filter(de_chan, r_chan, args)
+	f_done := filter(de_chan, r_chan, &filters{
+		REname: args.RE_name,
+	})
 	p_done := printer(r_chan)
 	ep_done := errprinter(err_chan)
 
