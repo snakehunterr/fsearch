@@ -6,8 +6,8 @@ import (
 )
 
 type filters struct {
-	REname  *regexp.Regexp
-	REiname *regexp.Regexp
+	name  *regexp.Regexp
+	iname *regexp.Regexp
 }
 
 func filter(de_chan <-chan dirent, r_chan chan<- dirent, filters *filters) chan struct{} {
@@ -29,14 +29,14 @@ func filter(de_chan <-chan dirent, r_chan chan<- dirent, filters *filters) chan 
 				}
 
 				// process this entry...
-				if filters.REname != nil {
-					if !filters.REname.Match(de.d_name[:de.d_namlen]) {
+				if filters.name != nil {
+					if !filters.name.Match(de.d_name[:de.d_namlen]) {
 						continue
 					}
 				}
 
-				if filters.REname != nil {
-					if filters.REiname.Match(de.d_name[:de.d_namlen]) {
+				if filters.iname != nil {
+					if filters.iname.Match(de.d_name[:de.d_namlen]) {
 						continue
 					}
 				}

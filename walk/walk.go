@@ -28,7 +28,8 @@ func Walk(args *args.Args) (err error) {
 	)
 
 	f_done := filter(de_chan, r_chan, &filters{
-		REname: args.RE_name,
+		name:  args.REName.Value,
+		iname: args.REIname.Value,
 	})
 	p_done := printer(r_chan)
 	ep_done := errprinter(err_chan)
@@ -36,7 +37,7 @@ func Walk(args *args.Args) (err error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = walk(args.Path, de_chan, err_chan, wg, sem)
+		err = walk(args.Path.Value, de_chan, err_chan, wg, sem)
 	}()
 
 	if err != nil {
