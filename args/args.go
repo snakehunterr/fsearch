@@ -5,15 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 )
-
-type Args struct {
-	RE_name  *regexp.Regexp
-	RE_iname *regexp.Regexp
-	Path     string
-}
 
 const (
 	C_RED     = "\x1B[31m"
@@ -31,59 +26,130 @@ const (
 	C_USAGE   = "\x1B[38;2;190;190;190m"
 )
 
+type arggroup int8
+
 const (
-	ARG_NAME      = "-name"
-	ARG_INAME     = "-iname"
-	ARG_HELP      = "-h"
-	ARG_HELP_LONG = "--help"
+	filterGroup arggroup = iota
+	optionsGroup
+	positionalGroup
 )
 
+type Arg[T any] struct {
+	Group arggroup
+	Name  string
+	Desc  string
+	parse func()
+	Value T
+}
+
+type Args struct {
+	REName  Arg[*regexp.Regexp]
+	REIname Arg[*regexp.Regexp]
+	Path    Arg[string]
+	Help    Arg[struct{}]
+}
+
 //go:embed version
-var version string
+var VERSION string
 
 func Argparse() (*Args, error) {
 	var (
 		argc  = len(os.Args)
 		argv  = os.Args
+		index int
 		arg   string
 		value string
 		err   error
 	)
 
-	args := &Args{
-		Path: ".", // set default value
+	// first, define default args and it's values
+
+	REName := Arg[*regexp.Regexp]{
+		Group: filterGroup,
+		Name:  "-name",
+		Desc:  "filter file names by regex matches",
+		Value: nil,
 	}
 
-	for i := 1; i < argc; i++ {
-		arg = argv[i]
+	REName.parse = func() {
+		index++
+		if index >= argc {
+			err = error_missing_arg_value(REName.Name)
+		}
+		value = argv[index]
+
+		REName.Value, err = regexp.Compile(value)
+		fmt.Println("in REName.Parse(): REName.Value: ", REName.Value)
+		if err != nil {
+			err = error_invalid_arg_value(REName.Name, value, err.Error())
+		}
+	}
+
+	REIname := Arg[*regexp.Regexp]{
+		Group: filterGroup,
+		Name:  "-iname",
+		Desc:  "exclude files which names matches this regex",
+		Value: nil,
+	}
+	REIname.parse = func() {
+		index++
+		if index >= argc {
+			err = error_missing_arg_value(REIname.Name)
+		}
+		value = argv[index]
+
+		REIname.Value, err = regexp.Compile(value)
+		if err != nil {
+			err = error_invalid_arg_value(REIname.Name, value, err.Error())
+		}
+	}
+
+	Help := Arg[struct{}]{
+		Group: optionsGroup,
+		Name:  "-help",
+		Desc:  "show this help and quit",
+	}
+
+	Path := Arg[string]{
+		Group: positionalGroup,
+		Name:  "PATH",
+		Desc:  "start walk from this path",
+		Value: ".",
+	}
+	Path.parse = func() {
+		Path.Value = argv[index]
+	}
+
+	// make a args struct
+	args := &Args{
+		REName:  REName,
+		REIname: REIname,
+		Path:    Path,
+		Help:    Help,
+	}
+
+	for index = 0; index < argc; index++ {
+		arg = argv[index]
 
 		switch arg {
-		case ARG_NAME:
-			i++
-			if i == argc {
-				return nil, error_missing_arg_value(arg)
-			}
-			value = argv[i]
-
-			args.RE_name, err = regexp.Compile(value)
+		case REName.Name:
+			fmt.Println("parsing rename")
+			REName.parse()
 			if err != nil {
-				return nil, error_invalid_arg_value(arg, value, err.Error())
+				return nil, err
+			}
+			if REName.Value == nil {
+				fmt.Println("both rename.Value and err is nil")
 			}
 
-		case ARG_INAME:
-			i++
-			if i == argc {
-				return nil, error_missing_arg_value(arg)
-			}
-			value = argv[i]
-
-			args.RE_iname, err = regexp.Compile(value)
+		case REIname.Name:
+			REIname.parse()
 			if err != nil {
-				return nil, error_invalid_arg_value(arg, value, err.Error())
+				return nil, err
 			}
 
-		case ARG_HELP, ARG_HELP_LONG:
-			print_usage(argv[0])
+		case Help.Name:
+			print_usage(argv[0], args)
 			os.Exit(0)
 
 		default:
@@ -92,10 +158,12 @@ func Argparse() (*Args, error) {
 			}
 
 			// then this is <path>
-			args.Path = arg
+			args.Path.Value = arg
 		}
 	}
 
+	fmt.Println(args.REName.Value)
+	fmt.Println(args.REIname.Value)
 	return args, nil
 }
 
@@ -120,7 +188,7 @@ func error_unknown_arg(arg string) error {
 }
 
 // print usage and exit
-func print_usage(prog_name string) {
+func print_usage(prog_name string, args *Args) {
 	rwidth := func(s string, n int) string {
 		if n <= len(s) {
 			return s
@@ -139,42 +207,59 @@ func print_usage(prog_name string) {
 		" dMP     dMP dMP dMP\"AMF dMP.aMP dMP dMP\n" + C_LINE5 +
 		"dMP      VMMMP\"" + C_RESET +
 		" dMMMMMP dMP dMP dMP dMP  VMMMP\" dMP dMP    " + C_LINE5 +
-		version + C_RESET
+		VERSION + C_RESET
 
 	const DESC_OFFSET = "  "
 
-	argtable := map[string]map[string]string{
-		"POSITIONAL": {
-			"PATH": "init path for walk",
-		},
-		"FILTERS": {
-			ARG_NAME:  "filter files by regex matches",
-			ARG_INAME: "exclude files by regex matches",
-		},
-		"OPTIONS": {
-			ARG_HELP + " " + ARG_HELP_LONG: "show this help and quit",
-		},
-	}
-
 	fmt.Println(LOGO)
 	fmt.Println()
-	fmt.Printf(C_USAGE+"Usage: %s [...OPTIONS] [...FILTERS] [PATH]"+C_RESET+"\n", prog_name)
+	fmt.Printf(C_USAGE+"Usage: %s "+args.Path.Name+" [...OPTIONS] [...FILTERS]"+C_RESET+"\n", prog_name)
 
-	var max_len int
-	for _, args := range argtable {
-		for k := range args {
-			if len(k) > max_len {
-				max_len = len(k)
-			}
+	posArgs := []Arg[any]{}
+	filterArgs := []Arg[any]{}
+	optionArgs := []Arg[any]{}
+	maxlen := 0
+
+	rvargs := reflect.ValueOf(*args)
+
+	fmt.Println("rvargs.NumField(): ", rvargs.NumField())
+	for i := range rvargs.NumField() {
+		field := rvargs.Field(i)
+
+		arg := Arg[any]{
+			Group: field.FieldByName("Group").Interface().(arggroup),
+			Name:  field.FieldByName("Name").Interface().(string),
+			Desc:  field.FieldByName("Desc").Interface().(string),
+		}
+
+		maxlen = max(maxlen, len(arg.Name))
+
+		switch arg.Group {
+		case positionalGroup:
+			posArgs = append(posArgs, arg)
+		case filterGroup:
+			filterArgs = append(filterArgs, arg)
+		case optionsGroup:
+			optionArgs = append(optionArgs, arg)
 		}
 	}
-	max_len += 4
 
-	for g, args := range argtable { // group, args
+	maxlen += 4 // padding
+
+	argtable := [3]struct {
+		g  string
+		as []Arg[any]
+	}{
+		{g: "POSITIONAL", as: posArgs},
+		{g: "FILTERS", as: filterArgs},
+		{g: "OPTIONS", as: optionArgs},
+	}
+
+	for _, argg := range argtable { // group, args
 		fmt.Println()
-		fmt.Println(g)
-		for n, h := range args { // name, help
-			fmt.Println(DESC_OFFSET + colorize_flag(rwidth(n, max_len)) + h)
+		fmt.Println(argg.g)
+		for _, arg := range argg.as {
+			fmt.Println(DESC_OFFSET + colorize_flag(rwidth(arg.Name, maxlen)) + arg.Desc)
 		}
 	}
 }

@@ -27,14 +27,17 @@ func Walk(args *args.Args) (err error) {
 		sem = make(chan struct{}, runtime.NumCPU()*8)
 	)
 
-	f_done := filter(de_chan, r_chan, args)
+	f_done := filter(de_chan, r_chan, &filters{
+		name:  args.REName.Value,
+		iname: args.REIname.Value,
+	})
 	p_done := printer(r_chan)
 	ep_done := errprinter(err_chan)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = walk(args.Path, de_chan, err_chan, wg, sem)
+		err = walk(args.Path.Value, de_chan, err_chan, wg, sem)
 	}()
 
 	if err != nil {
