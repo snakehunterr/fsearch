@@ -1,5 +1,9 @@
 # FSEARCH
 
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/snakehunterr/fsearch)
+![GitHub License](https://img.shields.io/github/license/snakehunterr/fsearch)
+![GitHub Version](<https://img.shields.io/github/v/tag/snakehunterr/fsearch?include_prereleases&sort=date&label=version&color=hex(2343ca)>)
+
 FSEARCH (fs) is a tool to find files, written in golang with zero dependency and enhanced with parallel power.
 
 ## Current supported platforms
